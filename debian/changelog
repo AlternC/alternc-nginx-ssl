@@ -1,0 +1,5 @@
+alternc-nginx-ssl (3.3) oldstable; urgency=low
+
+  * Initial module for AlternC
+
+ -- Benjamin Sonntag <benjamin@sonntag.fr>  Mon, 27 Feb 2018 12:32:33 +0200
