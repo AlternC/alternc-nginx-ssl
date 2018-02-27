@@ -1,3 +1,5 @@
 /usr/lib/alternc
 /etc/alternc/templates/nginx
 /var/www/letsencrypt/.well-known/acme-challenge
+/usr/lib/alternc/install.d
+/etc/apache2/conf-enabled

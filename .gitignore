@@ -1,0 +1,4 @@
+debian/.debhelper/
+debian/alternc-nginx-ssl.debhelper.log
+debian/alternc-nginx-ssl.substvars
+debian/alternc-nginx-ssl/

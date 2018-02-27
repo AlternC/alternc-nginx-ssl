@@ -66,6 +66,7 @@ openlog("[AlternC Nginx SSL]",null,LOG_USER);
 
 // Search for anything we are hosting locally :
 $nginxdir="/etc/nginx/sites-enabled";
+$letsencryptdir="/etc/letsencrypt/live";
 $reload=false;
 $db->query("SELECT domaine,sub FROM sub_domaines WHERE type IN (".$templates.");");
 while ($db->next_record()) {
