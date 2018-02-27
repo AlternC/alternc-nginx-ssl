@@ -123,7 +123,7 @@ openlog("[AlternC Nginx SSL]",null,LOG_USER);
 
 // Search for anything we are hosting locally :
 $nginxdir="/etc/nginx/sites-enabled";
-$letsencryptdir="/etc/letsencrypt/live";
+$letsencryptdir="/etc/letsencrypt";
 $reload=false;
 $db->query("SELECT domaine,sub FROM sub_domaines WHERE type IN (".$templates.");");
 while ($db->next_record()) {
@@ -167,6 +167,7 @@ while ($db->next_record()) {
             foreach($out as $line) if (trim($line)) syslog(LOG_ERR,trim($line));
             letsencrypt_failure($fqdn);
         } else {
+            syslog(LOG_INFO,"got a new certificate for $fqdn");
             letsencrypt_request($fqdn);
         } 
     } else {
@@ -177,6 +178,7 @@ while ($db->next_record()) {
                 $nginxdir."/".$fqdn.".alternc.conf",
                 str_replace("%%FQDN%%",$fqdn,file_get_contents("/etc/alternc/templates/nginx/nginx-template.conf"))
             );
+            syslog(LOG_INFO,"put nginx conf for $fqdn");
             $reload=true;
         }
     }
@@ -197,6 +199,7 @@ while (($c=readdir($d))!==false) {
         if (!in_array(substr($c,0,-13),$fqdnlist)) {
             $reload=true;
             unlink($nginxdir."/".$c);
+            syslog(LOG_INFO,"removed nginx conf for $fqdn");
         }
     }
 }
