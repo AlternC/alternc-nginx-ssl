@@ -1,0 +1,3 @@
+/usr/lib/alternc
+/etc/alternc/templates/nginx
+/var/www/letsencrypt/.well-known/acme-challenge

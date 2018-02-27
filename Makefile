@@ -28,4 +28,3 @@ install:
 	install -m 0644 -o root -g root nginx.conf $(DESTDIR)/etc/alternc/templates/nginx/
 	install -m 0644 -o root -g root nginx-template.conf $(DESTDIR)/etc/alternc/templates/nginx/
 	install -m 750 alternc-nginx-ssl-install $(DESTDIR)/usr/lib/alternc/install.d/
-
