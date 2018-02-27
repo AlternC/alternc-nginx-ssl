@@ -32,6 +32,11 @@
  * throttle the letsencrypt requests, thanks to a cache file in /var/cache/nginx-ssl/requests.json
  */ 
 
+// ------------------------------------------------------------
+if (getmyuid()!=0) {
+    echo "Fatal: must be launched as root !\n";
+    exit(1);
+}
 $lock="/run/update_nginx-ssl.lock";
 if (is_file($lock) && is_dir("/proc/".intval(file_get_contents($lock)))) {
     echo "Nginx-ssl locked\n";
@@ -39,8 +44,7 @@ if (is_file($lock) && is_dir("/proc/".intval(file_get_contents($lock)))) {
 }
 file_put_contents($lock,getmypid());
 
-
-putenv("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+// ------------------------------------------------------------
 // This is the list of alternc templates for which we DO have a vhost for Apache :
 $templatedir="/etc/alternc/templates/apache2";
 $d=opendir($templatedir);
@@ -61,6 +65,59 @@ closedir($d);
 // open a connection to the DB, get variables:
 // I will use $L_PUBLIC_IP too
 require_once("/usr/share/alternc/panel/class/config_nochk.php");
+putenv("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+
+// ------------------------------------------------------------
+// Throttling functions : 
+$cachedir="/var/cache/nginx-ssl";
+if (is_file($cachedir."/status.json")) {
+    $status=json_decode(file_get_contents($cachedir."/status.json"),true);
+} else {
+    $status=array("failures"=>array(),"requests"=>array());
+    mkdir($cachedir);
+}
+// cleanup of entries older than 2 days : 
+$now=time();
+foreach($status["failures"] as $k=>$v) {
+    if ($v[1]<($now-86400*2)) unset($status["failures"][$k]);
+}
+foreach($status["requests"] as $k=>$v) {
+    if ($v[1]<($now-86400*2)) unset($status["requests"][$k]);
+}
+file_put_contents($cachedir."/status.json",json_encode($status));
+
+// log any successful Letsencrypt request :
+function letsencrypt_request($fqdn) {
+    global $status;
+    $status["requests"][]=array($fqdn,time());
+}
+// log any failure in Letsencrypt request :
+function letsencrypt_failure($fqdn) {
+    global $status;
+    $status["failure"][]=array($fqdn,time());
+}
+// tell whether we can do a Letsencrypt Request for this FQDN now
+// don't do a request if we had 1 failure in the last hour or 3 failures in the last day FOR THIS FQDN
+// or we had more than 5 failures in the last hour or 10 requests in the last hour 
+function letsencrypt_allowed($fqdn) {
+    global $status;
+    $fqdnperday=0; $fqdnperhour=0;
+    $failureperhour=0; $requestperhour=0;
+    $now=time();
+    foreach($status["failures"] as $k=>$v) {
+        if ($fqdn==$v[0] && $v[1]>($now-3600)) $fqdnperhour++;
+        if ($fqdn==$v[0] && $v[1]>($now-86400)) $fqdnperday++;
+        if ($v[1]>($now-3600)) $failureperhour++;
+    }
+    foreach($status["requests"] as $k=>$v) {
+        if ($v[1]>($now-3600)) $requestperhour++;
+    }
+    if ($requestperhour>=10 || $fqdnperhour>=1 || $fqdnperday>=3 || $failureperhour>=5) {
+        return false;
+    }
+    return true;
+}
+
 
 openlog("[AlternC Nginx SSL]",null,LOG_USER);
 
@@ -91,27 +148,31 @@ while ($db->next_record()) {
     $fqdnlist[]=$fqdn;
     // cases :
     // - nginx OK + letsencrypt OK => do nothing
-    // - nginx NOK + letsencrypt OK => configure the vhost
 
     // - nginx NOK + letsencrypt NOK => get a letsencrypt cert
     if (!is_dir($letsencryptdir."/live/".$fqdn) ||
     !is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") ||
     !is_link($letsencryptdir."/live/".$fqdn."/privkey.pem")) {
         // letsencrypt not ready, do it :) (unless we are throttled, in that case, quit...)
-        // TODO : handle throttle in Letsencrypt : 1. no more than 10 certs per hour, 2. no more than 5 failure per hour
-        // 3. skip domain for which we had 2 failures in the previous day.
-        // 4. skip domain for which we had 1 failure in the previous hour. (allow to prioritize other FQDNs)
+
+        if (!letsencrypt_allowed($fqdn)) {
+            continue; // Skip this host entirely
+        }
+        
         $out=array(); $ret=-1;
-        exec("/usr/bin/letsencrypt certonly --webroot --agree-tos -w /var/www/letsencrypt/ --email root@".trim(file_get_contents("/etc/mailname"))." --expand -d ".escapeshellarg($fqdn),$out,$ret);
+        exec("/usr/bin/letsencrypt certonly --webroot --agree-tos -w /var/www/letsencrypt/ --email root@".trim(file_get_contents("/etc/mailname"))." --expand -d ".escapeshellarg($fqdn)." 2>&1",$out,$ret);
         if ($ret!=0) {
             // Log the failure skip it...
-            syslog("Can't get a certificate for $fqdn, letsencrypt logged this:");
-            foreach($out as $line) if (trim($line)) syslog(trim($line));
-            // TODO : add it to our memory (for the throttling)
-        }
+            syslog(LOG_ERR,"Can't get a certificate for $fqdn, letsencrypt logged this:");
+            foreach($out as $line) if (trim($line)) syslog(LOG_ERR,trim($line));
+            letsencrypt_failure($fqdn);
+        } else {
+            letsencrypt_request($fqdn);
+        } 
     } else {
         // Cert is OK, let's check nginx conf :
         if (!is_file($nginxdir."/".$fqdn.".alternc.conf")) {
+            // - nginx NOK + letsencrypt OK => configure the vhost
             file_put_contents(
                 $nginxdir."/".$fqdn.".alternc.conf",
                 str_replace("%%FQDN%%",$fqdn,file_get_contents("/etc/alternc/templates/nginx/nginx-template.conf"))
@@ -121,6 +182,8 @@ while ($db->next_record()) {
     }
 }
 
+// remember the cache (for throttling)
+file_put_contents($cachedir."/status.json",json_encode($status));
 
 // Remove old or expired configuration files from Nginx :
 $d=opendir($nginxdir);
@@ -140,7 +203,7 @@ while (($c=readdir($d))!==false) {
 closedir($d);
 
 if ($reload) {
-    syslog("Reloading Nginx...");
+    syslog(LOG_INFO,"Reloading Nginx...");
     exec("service nginx reload");
 }
 
