@@ -57,15 +57,19 @@ $templates="";
 while (($c=readdir($d))!==false) {
     if (is_file($templatedir."/".$c) && substr($c,-5)==".conf") {
         if ($templates) $templates.=",";
-        $templates="'".substr($c,0,-5)."'";
+        $templates.="'".substr($c,0,-5)."'";
     }
 }
 closedir($d);
 
+
+// ------------------------------------------------------------
 // open a connection to the DB, get variables:
 // I will use $L_PUBLIC_IP too
 require_once("/usr/share/alternc/panel/class/config_nochk.php");
 putenv("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+openlog("[AlternC Nginx SSL]",null,LOG_USER);
+
 
 // ------------------------------------------------------------
 // Throttling functions : 
@@ -119,8 +123,7 @@ function letsencrypt_allowed($fqdn) {
 }
 
 
-openlog("[AlternC Nginx SSL]",null,LOG_USER);
-
+// ------------------------------------------------------------
 // Search for anything we are hosting locally :
 $nginxdir="/etc/nginx/sites-enabled";
 $letsencryptdir="/etc/letsencrypt";
@@ -144,7 +147,8 @@ while ($db->next_record()) {
     if (!$found) { // MY IP address is not in the DNS for this FQDN...
         continue; // Skip this host entirely... TODO : delete files in /etc/letsencrypt/live/ archive/ and renewal/
     }
-    // This FQDN is in our official list. (we will delete nginx vhosts NOT in this list at the end)
+
+
     $fqdnlist[]=$fqdn;
     // cases :
     // - nginx OK + letsencrypt OK => do nothing
@@ -153,8 +157,7 @@ while ($db->next_record()) {
     if (!is_dir($letsencryptdir."/live/".$fqdn) ||
     !is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") ||
     !is_link($letsencryptdir."/live/".$fqdn."/privkey.pem")) {
-        // letsencrypt not ready, do it :) (unless we are throttled, in that case, quit...)
-
+        // letsencrypt not ready for this fqdn, do it :) (unless we are throttled, in that case, quit...)        
         if (!letsencrypt_allowed($fqdn)) {
             continue; // Skip this host entirely
         }
@@ -170,10 +173,11 @@ while ($db->next_record()) {
             syslog(LOG_INFO,"got a new certificate for $fqdn");
             letsencrypt_request($fqdn);
         } 
-    } else {
-        // Cert is OK, let's check nginx conf :
+    }
+    
+    // - nginx NOK + letsencrypt OK => configure the vhost
+    if (is_dir($letsencryptdir."/live/".$fqdn) && is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") && is_link($letsencryptdir."/live/".$fqdn."/privkey.pem")) {
         if (!is_file($nginxdir."/".$fqdn.".alternc.conf")) {
-            // - nginx NOK + letsencrypt OK => configure the vhost
             file_put_contents(
                 $nginxdir."/".$fqdn.".alternc.conf",
                 str_replace("%%FQDN%%",$fqdn,file_get_contents("/etc/alternc/templates/nginx/nginx-template.conf"))
@@ -187,6 +191,8 @@ while ($db->next_record()) {
 // remember the cache (for throttling)
 file_put_contents($cachedir."/status.json",json_encode($status));
 
+
+// ------------------------------------------------------------
 // Remove old or expired configuration files from Nginx :
 $d=opendir($nginxdir);
 if (!$d) {
