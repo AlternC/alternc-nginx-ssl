@@ -74,7 +74,7 @@ if (is_file($cachedir."/status.json")) {
     $status=json_decode(file_get_contents($cachedir."/status.json"),true);
 } else {
     $status=array("failures"=>array(),"requests"=>array());
-    mkdir($cachedir);
+    @mkdir($cachedir);
 }
 // cleanup of entries older than 2 days : 
 $now=time();
@@ -94,7 +94,7 @@ function letsencrypt_request($fqdn) {
 // log any failure in Letsencrypt request :
 function letsencrypt_failure($fqdn) {
     global $status;
-    $status["failure"][]=array($fqdn,time());
+    $status["failures"][]=array($fqdn,time());
 }
 // tell whether we can do a Letsencrypt Request for this FQDN now
 // don't do a request if we had 1 failure in the last hour or 3 failures in the last day FOR THIS FQDN
