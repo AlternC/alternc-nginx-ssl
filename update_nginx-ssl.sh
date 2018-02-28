@@ -77,7 +77,7 @@ $cachedir="/var/cache/nginx-ssl";
 if (is_file($cachedir."/status.json")) {
     $status=json_decode(file_get_contents($cachedir."/status.json"),true);
 } else {
-    $status=array("failures"=>array(),"requests"=>array());
+    $status=array("failures"=>array(),"requests"=>array(),"lastrenew"=>0);
     @mkdir($cachedir);
 }
 // cleanup of entries older than 2 days : 
@@ -122,12 +122,70 @@ function letsencrypt_allowed($fqdn) {
     return true;
 }
 
+// ------------------------------------------------------------
+// function to see and do a cert renewal: 
+function try_renew($fqdn) {
+    global $letsencryptdir,$reload,$L_PUBLIC_IP;
+    if (!is_link($letsencryptdir."/live/".$fqdn."/cert.pem")) {
+        syslog(LOG_ERR,"Can't find cert.pem for renewal of $fqdn, weird");
+        return false;
+    }
+    exec("openssl x509 -in ".escapeshellarg($letsencryptdir."/live/".$fqdn."/cert.pem")." -noout -enddate",$out,$ret);
+    if ($ret!=0) {
+        syslog(LOG_ERR,"invalid cert.pem for $fqdn");
+        return false;
+    }
+    // Apr 14 23:00:53 2018 GMT
+    if (count($out) && preg_match("#notAfter=(.*)#",$out[0],$mat)) {
+        $expires = DateTime::createFromFormat("M j H:i:s Y e",$mat[1]);
+        if (!is_object($expires)) {
+            syslog(LOG_ERR,"invalid cert.pem for $fqdn, date can't be parsed: ".$mat[1]);
+            return false;      
+        }
+        if ($expires->format("U")<(time()+86400*30)) {
+            // is expired, renewing...
+            $out=array();
+            exec("dig +short A ".escapeshellarg($fqdn),$out);
+            $found=false;
+            foreach($out as $line) {
+                if (trim($line)==$L_PUBLIC_IP) {
+                    $found=true;
+                    break;
+                }
+            }
+            if (!$found) { // MY IP address is not in the DNS for this FQDN...
+                syslog(LOG_ERR,"we should renew $fqdn, but it is not pointing to us in the DNS. skipping");
+                return false;
+            }
+            syslog(LOG_INFO,"Cert for $fqdn will expire in less than 30 days, renewing...");
+            $out=array();
+            sleep(1); // prevent to hit the global throttle of 10hits/sec on LE servers
+            exec("/usr/bin/letsencrypt certonly --webroot -w /var/www/letsencrypt/ --expand -d ".escapeshellarg($fqdn)." 2>&1",$out,$ret);
+            if ($ret!=0) {
+                // Log the failure skip it...
+                syslog(LOG_ERR,"Can't get a certificate renewal for $fqdn, letsencrypt logged this:");
+                foreach($out as $line) if (trim($line)) syslog(LOG_ERR,trim($line));
+                letsencrypt_failure($fqdn);
+            } else {
+                syslog(LOG_INFO,"got a renewed certificate for $fqdn");
+                $reload=true;
+                // letsencrypt_request($fqdn); // RENEWAL are not counting in the throttling ;) 
+            }
+        }
+    }
+}
+
 
 // ------------------------------------------------------------
 // Search for anything we are hosting locally :
 $nginxdir="/etc/nginx/sites-enabled";
 $letsencryptdir="/etc/letsencrypt";
 $reload=false;
+$renew=false;
+// try the renewals only on Mondays, every 4 hours between 8 am and 5 pm :) 
+if (date("N")==1 && date("H")>7 && date("H")<17 && (!isset($status["lastrenew"]) || $status["lastrenew"]<(time()-14400))) {
+    $renew=true;
+}
 $db->query("SELECT domaine,sub FROM sub_domaines WHERE type IN (".$templates.");");
 while ($db->next_record()) {
     if ($db->Record["sub"])
@@ -163,6 +221,7 @@ while ($db->next_record()) {
         }
         
         $out=array(); $ret=-1;
+        sleep(1); // prevent to hit the global throttle of 10hits/sec on LE servers
         exec("/usr/bin/letsencrypt certonly --webroot --agree-tos -w /var/www/letsencrypt/ --email root@".trim(file_get_contents("/etc/mailname"))." --expand -d ".escapeshellarg($fqdn)." 2>&1",$out,$ret);
         if ($ret!=0) {
             // Log the failure skip it...
@@ -185,8 +244,13 @@ while ($db->next_record()) {
             syslog(LOG_INFO,"put nginx conf for $fqdn");
             $reload=true;
         }
+        // If a cert exists AND we want to test its renewal, let's test its date:
+        if ($renew) try_renew($fqdn);
     }
 }
+
+// we renewed the certs whose expiration date is < 30 days
+if ($renew) $status["renewal"]=time();
 
 // remember the cache (for throttling)
 file_put_contents($cachedir."/status.json",json_encode($status));
@@ -205,7 +269,9 @@ while (($c=readdir($d))!==false) {
         if (!in_array(substr($c,0,-13),$fqdnlist)) {
             $reload=true;
             unlink($nginxdir."/".$c);
-            syslog(LOG_INFO,"removed nginx conf for $fqdn");
+            $fqdn=substr($c,0,-13);
+            exec("rm -rf ".escapeshellarg($letsencryptdir."/live/$fqdn")." ".escapeshellarg($letsencryptdir."/archive/$fqdn")." ".escapeshellarg($letsencryptdir."/renewal/".$fqdn.".conf"));
+            syslog(LOG_INFO,"removed nginx conf & letsencrypt certificate for $fqdn");
         }
     }
 }
