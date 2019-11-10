@@ -9,7 +9,7 @@ Package: alternc-nginx-ssl
 Priority: optional
 Section: admin
 Architecture: all
-Depends: nginx-extras, letsencrypt, alternc (>= 3.2.10), dnsutils, libapache2-mod-rpaf
+Depends: nginx-extras, letsencrypt | certbot, alternc (>= 3.2.10), dnsutils, libapache2-mod-rpaf
 Description: Nginx + SSL via Letsencrypt module for AlternC
  AlternC is a mutualized hosting software manager for Linux.
  It allows you to manage your websites, domains, ftp, emails, aliases,

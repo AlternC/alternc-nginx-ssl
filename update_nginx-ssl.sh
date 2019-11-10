@@ -30,6 +30,8 @@
  * if necessary, generate or update a letsencrypt certificate.
  * if necessary, reload nginx.
  * throttle the letsencrypt requests, thanks to a cache file in /var/cache/nginx-ssl/requests.json
+ * has a blacklist of FQDN & domains to ignore (because we have too many or they are provoking errors, like too long fqdn on jessie's certbot)
+ * the blacklist is a one-line-per-domaine file in /etc/alternc/nginx-ssl.blacklist.txt
  */ 
 
 // ------------------------------------------------------------
@@ -62,6 +64,9 @@ while (($c=readdir($d))!==false) {
 }
 closedir($d);
 
+// fqdn/domains blacklist
+$blacklist=@explode("\n",@file_get_contents("/etc/alternc/nginx-ssl.blacklist.txt"));
+if (!is_array($blacklist)) $blacklist=array();
 
 // ------------------------------------------------------------
 // open a connection to the DB, get variables:
@@ -70,6 +75,10 @@ require_once("/usr/share/alternc/panel/class/config_nochk.php");
 putenv("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
 openlog("[AlternC Nginx SSL]",null,LOG_USER);
 
+// All my ips : 
+$myips=array($L_PUBLIC_IP);
+exec('ip address show|grep \'inet \'|sed -e \'s#^.*inet \([^/]*\).*#\1#\'|grep -v 127.0.0.1',$myips);
+// ' );
 
 // ------------------------------------------------------------
 // Throttling functions : 
@@ -77,7 +86,7 @@ $cachedir="/var/cache/nginx-ssl";
 if (is_file($cachedir."/status.json")) {
     $status=json_decode(file_get_contents($cachedir."/status.json"),true);
 } else {
-    $status=array("failures"=>array(),"requests"=>array(),"lastrenew"=>0);
+    $status=array( "failures"=>array(), "requests"=>array(), "lastrenew"=>0, "uninstall" => array() );
     @mkdir($cachedir);
 }
 // cleanup of entries older than 2 days : 
@@ -100,6 +109,9 @@ function letsencrypt_failure($fqdn) {
     global $status;
     $status["failures"][]=array($fqdn,time());
 }
+
+
+// ------------------------------------------------------------
 // tell whether we can do a Letsencrypt Request for this FQDN now
 // don't do a request if we had 1 failure in the last hour or 3 failures in the last day FOR THIS FQDN
 // or we had more than 5 failures in the last hour or 10 requests in the last hour 
@@ -116,16 +128,17 @@ function letsencrypt_allowed($fqdn) {
     foreach($status["requests"] as $k=>$v) {
         if ($v[1]>($now-3600)) $requestperhour++;
     }
-    if ($requestperhour>=10 || $fqdnperhour>=1 || $fqdnperday>=3 || $failureperhour>=5) {
+    if ($requestperhour>=100 || $fqdnperhour>=10 || $fqdnperday>=30 || $failureperhour>=20) {
         return false;
     }
     return true;
 }
 
+
 // ------------------------------------------------------------
-// function to see and do a cert renewal: 
+// function to see if it's necessary, and do a cert renewal: 
 function try_renew($fqdn) {
-    global $letsencryptdir,$reload,$L_PUBLIC_IP;
+    global $letsencryptdir,$reload,$myips;
     if (!is_link($letsencryptdir."/live/".$fqdn."/cert.pem")) {
         syslog(LOG_ERR,"Can't find cert.pem for renewal of $fqdn, weird");
         return false;
@@ -148,7 +161,7 @@ function try_renew($fqdn) {
             exec("dig +short A ".escapeshellarg($fqdn),$out);
             $found=false;
             foreach($out as $line) {
-                if (trim($line)==$L_PUBLIC_IP) {
+                if (in_array( trim($line), $myips)) {
                     $found=true;
                     break;
                 }
@@ -182,28 +195,32 @@ $nginxdir="/etc/nginx/sites-enabled";
 $letsencryptdir="/etc/letsencrypt";
 $reload=false;
 $renew=false;
+
 // try the renewals only on Mondays, every 4 hours between 8 am and 5 pm :) 
 if (date("N")==1 && date("H")>7 && date("H")<17 && (!isset($status["lastrenew"]) || $status["lastrenew"]<(time()-14400))) {
     $renew=true;
 }
 $db->query("SELECT domaine,sub FROM sub_domaines WHERE type IN (".$templates.");");
 while ($db->next_record()) {
-    if ($db->Record["sub"])
-        $fqdn=$db->Record["sub"].".".$db->Record["domaine"];
-    else
-        $fqdn=$db->Record["domaine"];
-    // Check the DNS for this domain.
+
+    $fqdn=$db->Record["sub"].(($db->Record["sub"])?".":"").$db->Record["domaine"];
+
+    if (in_array($db->Record["domaine"],$blacklist) || in_array($fqdn,$blacklist)) {
+        continue;
+    }
+
+	// Check the DNS for this fqdn. it should point to one of our IP addresses
     $out=array();
     exec("dig +short A ".escapeshellarg($fqdn),$out);
     $found=false;
     foreach($out as $line) {
-        if (trim($line)==$L_PUBLIC_IP) {
+        if (in_array( trim($line), $myips)) {
             $found=true;
             break;
         }
     }
     if (!$found) { // MY IP address is not in the DNS for this FQDN...
-        continue; // Skip this host entirely... TODO : delete files in /etc/letsencrypt/live/ archive/ and renewal/
+        continue; 
     }
 
 
@@ -249,33 +266,56 @@ while ($db->next_record()) {
     }
 }
 
-// we renewed the certs whose expiration date is < 30 days
-if ($renew) $status["renewal"]=time();
-
-// remember the cache (for throttling)
-file_put_contents($cachedir."/status.json",json_encode($status));
-
-
 // ------------------------------------------------------------
 // Remove old or expired configuration files from Nginx :
+// We don't remove them at once, we wait for a FQDN to be pointing somewhere else for at least 2 DAYS
+// so that we don't delete certificates at once.
+
 $d=opendir($nginxdir);
 if (!$d) {
     echo "Can't open $nginxdir\n";
     exit(1);
     @unlink($lock);
 }
+// search for the bad ones NOW 
+$badlist=array();
 while (($c=readdir($d))!==false) {
     if (is_file($nginxdir."/".$c) && substr($c,-13)==".alternc.conf") {
         if (!in_array(substr($c,0,-13),$fqdnlist)) {
+            $badlist[]=substr($c,0,-13);
+        }
+    }
+}
+closedir($d);
+// compare that with the status list (both ways)
+foreach($status["uninstall"] as $fqdn=>$ts) {
+    if (!in_array($fqdn,$badlist)) {
+        unset($status["uninstall"][$fqdn]);
+    }
+}
+foreach($badlist as $fqdn) {
+    if (!isset($status["uninstall"][$fqdn])) {
+        $status["uninstall"][$fqdn]=time();
+    } else {
+        // not new, therefore may be here since >2day ?
+        if ($status["uninstall"][$fqdn]<(time()-86400*2)) {
+            unset($status["uninstall"][$fqdn]);
+            // deleted since 2 days or more in a continuous way, let's delete cert & nginx conf
             $reload=true;
-            unlink($nginxdir."/".$c);
-            $fqdn=substr($c,0,-13);
+            unlink($nginxdir."/".$fqdn.".alternc.conf");
             exec("rm -rf ".escapeshellarg($letsencryptdir."/live/$fqdn")." ".escapeshellarg($letsencryptdir."/archive/$fqdn")." ".escapeshellarg($letsencryptdir."/renewal/".$fqdn.".conf"));
             syslog(LOG_INFO,"removed nginx conf & letsencrypt certificate for $fqdn");
         }
     }
 }
-closedir($d);
+
+
+// we renewed the certs whose expiration date is < 30 days
+if ($renew) $status["renewal"]=time();
+
+// remember the cache (for throttling)
+file_put_contents($cachedir."/status.json",json_encode($status));
+
 
 if ($reload) {
     syslog(LOG_INFO,"Reloading Nginx...");

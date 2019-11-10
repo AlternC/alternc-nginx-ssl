@@ -1,3 +1,11 @@
+alternc-nginx-ssl (3.3.1) oldstable; urgency=low
+
+  * adds a proper cert/nginx conf deleted only when fqdn is not configured properly for more than 2 days.
+  * adds a blacklist in /etc/alternc/nginx-ssl.blacklist.txt
+  * fix proper dependencies for stretch
+
+ -- Benjamin Sonntag <benjamin@sonntag.fr>  Sun, 10 Nov 2019 15:49:00 +0200
+
 alternc-nginx-ssl (3.3) oldstable; urgency=low
 
   * Initial module for AlternC
