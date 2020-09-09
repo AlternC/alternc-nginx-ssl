@@ -1,4 +1,11 @@
-alternc-nginx-ssl (3.3.1) oldstable; urgency=low
+alternc-nginx-ssl (3.3.3) oldstable; urgency=low
+
+  * fix the nginx template to ignore acme-challenge only, not all .well-known (fixes nextcloud caldav discovery for iOS)
+  * adds the ability to use a "<fqdn>.manual.conf" configuration file in nginx sites-enabled, skipping the automatic nginx conf.
+
+ -- Benjamin Sonntag <benjamin@sonntag.fr>  Wed,  9 Sep 2020 11:11:00 +0200
+
+alternc-nginx-ssl (3.3.2) oldstable; urgency=low
 
   * adds a proper cert/nginx conf deleted only when fqdn is not configured properly for more than 2 days.
   * adds a blacklist in /etc/alternc/nginx-ssl.blacklist.txt

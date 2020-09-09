@@ -253,7 +253,7 @@ while ($db->next_record()) {
     
     // - nginx NOK + letsencrypt OK => configure the vhost
     if (is_dir($letsencryptdir."/live/".$fqdn) && is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") && is_link($letsencryptdir."/live/".$fqdn."/privkey.pem")) {
-        if (!is_file($nginxdir."/".$fqdn.".alternc.conf")) {
+        if (!is_file($nginxdir."/".$fqdn.".alternc.conf") && !is_file($nginxdir."/".$fqdn.".manual.conf")) { // if you define a vhost with .manual.conf, we ignore AlternC's one (allow for a Varnish conf or others
             file_put_contents(
                 $nginxdir."/".$fqdn.".alternc.conf",
                 str_replace("%%FQDN%%",$fqdn,file_get_contents("/etc/alternc/templates/nginx/nginx-template.conf"))
