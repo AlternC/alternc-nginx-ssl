@@ -288,23 +288,25 @@ while (($c=readdir($d))!==false) {
 }
 closedir($d);
 // compare that with the status list (both ways)
-foreach($status["uninstall"] as $fqdn=>$ts) {
-    if (!in_array($fqdn,$badlist)) {
-        unset($status["uninstall"][$fqdn]);
-    }
-}
-foreach($badlist as $fqdn) {
-    if (!isset($status["uninstall"][$fqdn])) {
-        $status["uninstall"][$fqdn]=time();
-    } else {
-        // not new, therefore may be here since >2day ?
-        if ($status["uninstall"][$fqdn]<(time()-86400*2)) {
+if (array_key_exists("uninstall", $status)) {
+    foreach($status["uninstall"] as $fqdn=>$ts) {
+        if (!in_array($fqdn,$badlist)) {
             unset($status["uninstall"][$fqdn]);
-            // deleted since 2 days or more in a continuous way, let's delete cert & nginx conf
-            $reload=true;
-            unlink($nginxdir."/".$fqdn.".alternc.conf");
-            exec("rm -rf ".escapeshellarg($letsencryptdir."/live/$fqdn")." ".escapeshellarg($letsencryptdir."/archive/$fqdn")." ".escapeshellarg($letsencryptdir."/renewal/".$fqdn.".conf"));
-            syslog(LOG_INFO,"removed nginx conf & letsencrypt certificate for $fqdn");
+        }
+    }
+    foreach($badlist as $fqdn) {
+        if (!isset($status["uninstall"][$fqdn])) {
+            $status["uninstall"][$fqdn]=time();
+        } else {
+            // not new, therefore may be here since >2day ?
+            if ($status["uninstall"][$fqdn]<(time()-86400*2)) {
+                unset($status["uninstall"][$fqdn]);
+                // deleted since 2 days or more in a continuous way, let's delete cert & nginx conf
+                $reload=true;
+                unlink($nginxdir."/".$fqdn.".alternc.conf");
+                exec("rm -rf ".escapeshellarg($letsencryptdir."/live/$fqdn")." ".escapeshellarg($letsencryptdir."/archive/$fqdn")." ".escapeshellarg($letsencryptdir."/renewal/".$fqdn.".conf"));
+                syslog(LOG_INFO,"removed nginx conf & letsencrypt certificate for $fqdn");
+            }
         }
     }
 }
