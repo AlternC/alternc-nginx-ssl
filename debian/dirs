@@ -5,4 +5,4 @@
 /etc/apache2/conf-enabled
 /var/cache/nginx-ssl
 /etc/environment.d
-/usr/local/sbin
+/usr/sbin

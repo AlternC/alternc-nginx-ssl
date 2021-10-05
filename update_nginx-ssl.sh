@@ -184,6 +184,7 @@ while ($db->next_record()) {
     // - Letsencrypt OK BUT will expire soon => migrate to acme.sh
     if (is_dir($letsencryptdir."/live/".$fqdn) && is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") && is_link($letsencryptdir."/live/".$fqdn."/privkey.pem") && !is_file($acmedir."/".$fqdn."/".$fqdn.".key")) {
         // shall we migrate ?
+        $out=array();
         exec("openssl x509 -in ".escapeshellarg($letsencryptdir."/live/".$fqdn."/cert.pem")." -noout -enddate",$out,$ret);
         if ($ret!=0) {
             syslog(LOG_ERR,"invalid cert.pem for $fqdn");
@@ -207,7 +208,7 @@ while ($db->next_record()) {
                     foreach($out as $line) if (trim($line)) syslog(LOG_ERR,trim($line));
                     letsencrypt_failure($fqdn);
                 } else {
-                    syslog(LOG_INFO,"got a new certificate for $fqdn");
+                    syslog(LOG_INFO,"got a migrated certificate for $fqdn");
                     if (!is_file($nginxdir."/".$fqdn.".manual.conf")) {
                         syslog(LOG_INFO,"removing old letsencrypt live/ cert");
                         @unlink($letsencryptdir."/live/".$fqdn."/fullchain.pem");
@@ -309,8 +310,6 @@ if (array_key_exists("uninstall", $status)) {
 }
 
 
-// we renewed the certs whose expiration date is < 30 days
-if ($renew) $status["renewal"]=time();
 
 // remember the cache (for throttling)
 file_put_contents($cachedir."/status.json",json_encode($status));
