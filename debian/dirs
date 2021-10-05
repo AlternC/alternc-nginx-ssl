@@ -4,3 +4,5 @@
 /usr/lib/alternc/install.d
 /etc/apache2/conf-enabled
 /var/cache/nginx-ssl
+/etc/environment.d
+/usr/local/sbin

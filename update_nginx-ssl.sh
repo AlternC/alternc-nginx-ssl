@@ -21,7 +21,7 @@
 
  To read the license please visit http://www.gnu.org/copyleft/gpl.html
  ----------------------------------------------------------------------
- Purpose of file: Update nginx conf + letsencrypt certs
+ Purpose of file: Update nginx conf + ACME.SH certs
  ----------------------------------------------------------------------
  */
  
@@ -39,6 +39,11 @@ if (getmyuid()!=0) {
     echo "Fatal: must be launched as root !\n";
     exit(1);
 }
+if (!is_file("/etc/acme.sh/account.conf")) {
+    echo "Fatal: ACME.SH MUST be configured ! account.conf not found\n";
+    exit(1);
+}
+
 $lock="/run/update_nginx-ssl.lock";
 if (is_file($lock) && is_dir("/proc/".intval(file_get_contents($lock)))) {
     echo "Nginx-ssl locked\n";
@@ -114,7 +119,9 @@ function letsencrypt_failure($fqdn) {
 // ------------------------------------------------------------
 // tell whether we can do a Letsencrypt Request for this FQDN now
 // don't do a request if we had 1 failure in the last hour or 3 failures in the last day FOR THIS FQDN
-// or we had more than 5 failures in the last hour or 10 requests in the last hour 
+// or we had more than 5 failures in the last hour or 10 requests in the last hour
+// NOTE: we may not need that with ACME services other than Letsencrypt, but having a rate limit allow
+// for a load-balancing between FQDN.
 function letsencrypt_allowed($fqdn) {
     global $status;
     $fqdnperday=0; $fqdnperhour=0;
@@ -136,70 +143,16 @@ function letsencrypt_allowed($fqdn) {
 
 
 // ------------------------------------------------------------
-// function to see if it's necessary, and do a cert renewal: 
-function try_renew($fqdn) {
-    global $letsencryptdir,$reload,$myips;
-    if (!is_link($letsencryptdir."/live/".$fqdn."/cert.pem")) {
-        syslog(LOG_ERR,"Can't find cert.pem for renewal of $fqdn, weird");
-        return false;
-    }
-    exec("openssl x509 -in ".escapeshellarg($letsencryptdir."/live/".$fqdn."/cert.pem")." -noout -enddate",$out,$ret);
-    if ($ret!=0) {
-        syslog(LOG_ERR,"invalid cert.pem for $fqdn");
-        return false;
-    }
-    // Apr 14 23:00:53 2018 GMT
-    if (count($out) && preg_match("#notAfter=(.*)#",$out[0],$mat)) {
-        $expires = DateTime::createFromFormat("M j H:i:s Y e",$mat[1]);
-        if (!is_object($expires)) {
-            syslog(LOG_ERR,"invalid cert.pem for $fqdn, date can't be parsed: ".$mat[1]);
-            return false;      
-        }
-        if ($expires->format("U")<(time()+86400*30)) {
-            // is expired, renewing...
-            $out=array();
-            exec("dig +short A ".escapeshellarg($fqdn),$out);
-            $found=false;
-            foreach($out as $line) {
-                if (in_array( trim($line), $myips)) {
-                    $found=true;
-                    break;
-                }
-            }
-            if (!$found) { // MY IP address is not in the DNS for this FQDN...
-                syslog(LOG_ERR,"we should renew $fqdn, but it is not pointing to us in the DNS. skipping");
-                return false;
-            }
-            syslog(LOG_INFO,"Cert for $fqdn will expire in less than 30 days, renewing...");
-            $out=array();
-            sleep(1); // prevent to hit the global throttle of 10hits/sec on LE servers
-            exec("/usr/bin/letsencrypt certonly --webroot -w /var/www/letsencrypt/ --expand -d ".escapeshellarg($fqdn)." 2>&1",$out,$ret);
-            if ($ret!=0) {
-                // Log the failure skip it...
-                syslog(LOG_ERR,"Can't get a certificate renewal for $fqdn, letsencrypt logged this:");
-                foreach($out as $line) if (trim($line)) syslog(LOG_ERR,trim($line));
-                letsencrypt_failure($fqdn);
-            } else {
-                syslog(LOG_INFO,"got a renewed certificate for $fqdn");
-                $reload=true;
-                // letsencrypt_request($fqdn); // RENEWAL are not counting in the throttling ;) 
-            }
-        }
-    }
-}
-
-
-// ------------------------------------------------------------
 // Search for anything we are hosting locally :
 $nginxdir="/etc/nginx/sites-enabled";
 $letsencryptdir="/etc/letsencrypt";
+$acmedir="/etc/acme.sh";
 $reload=false;
-$renew=false;
 
-// try the renewals only on Mondays, every 4 hours between 8 am and 5 pm :) 
-if (date("N")==1 && date("H")>7 && date("H")<17 && (!isset($status["lastrenew"]) || $status["lastrenew"]<(time()-14400))) {
-    $renew=true;
-}
+// We DON'T do renewals: acme.sh will do it automagically.
+// BUT we migrate from letsencrypt to acme.sh when an upgrade is required
+// in that case we REDO (if no manual exist) the nginx conf entirely.
+
 $db->query("SELECT domaine,sub FROM sub_domaines WHERE type IN (".$templates.");");
 while ($db->next_record()) {
 
@@ -226,23 +179,67 @@ while ($db->next_record()) {
 
     $fqdnlist[]=$fqdn;
     // cases :
-    // - nginx OK + letsencrypt OK => do nothing
+    // - nginx OK + letsencrypt OK & not to be renewed => do nothing
 
-    // - nginx NOK + letsencrypt NOK => get a letsencrypt cert
-    if (!is_dir($letsencryptdir."/live/".$fqdn) ||
-    !is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") ||
-    !is_link($letsencryptdir."/live/".$fqdn."/privkey.pem")) {
-        // letsencrypt not ready for this fqdn, do it :) (unless we are throttled, in that case, quit...)        
+    // - Letsencrypt OK BUT will expire soon => migrate to acme.sh
+    if (is_dir($letsencryptdir."/live/".$fqdn) && is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") && is_link($letsencryptdir."/live/".$fqdn."/privkey.pem") && !is_file($acmedir."/".$fqdn."/".$fqdn.".key")) {
+        // shall we migrate ?
+        exec("openssl x509 -in ".escapeshellarg($letsencryptdir."/live/".$fqdn."/cert.pem")." -noout -enddate",$out,$ret);
+        if ($ret!=0) {
+            syslog(LOG_ERR,"invalid cert.pem for $fqdn");
+            return false;
+        }
+        // Apr 14 23:00:53 2018 GMT
+        if (count($out) && preg_match("#notAfter=(.*)#",$out[0],$mat)) {
+            $expires = DateTime::createFromFormat("M j H:i:s Y e",$mat[1]);
+            if (!is_object($expires)) {
+                syslog(LOG_ERR,"invalid cert.pem for $fqdn, date can't be parsed: ".$mat[1]);
+                return false;      
+            }
+            if ($expires->format("U")<(time()+86400*30)) {
+                // is expired, migrating to ACME.SH:
+                syslog(LOG_INFO,"Letsencrypt cert for $fqdn will expire in 30 days, migrating to acme.sh");
+                $out=array(); $ret=-1;
+                exec("acme.sh --issue  -d ".escapeshellarg($fqdn)." --webroot /var/www/letsencrypt/ 2>&1",$out,$ret);
+                if ($ret!=0) {
+                    // Log the failure skip it...
+                    syslog(LOG_ERR,"Can't get a certificate for $fqdn, acme.sh logged this:");
+                    foreach($out as $line) if (trim($line)) syslog(LOG_ERR,trim($line));
+                    letsencrypt_failure($fqdn);
+                } else {
+                    syslog(LOG_INFO,"got a new certificate for $fqdn");
+                    if (!is_file($nginxdir."/".$fqdn.".manual.conf")) {
+                        syslog(LOG_INFO,"removing old letsencrypt live/ cert");
+                        @unlink($letsencryptdir."/live/".$fqdn."/fullchain.pem");
+                        @unlink($letsencryptdir."/live/".$fqdn."/cert.pem");
+                        @unlink($letsencryptdir."/live/".$fqdn."/privkey.pem");
+                        @unlink($letsencryptdir."/live/".$fqdn."/chain.pem");
+                        @rmdir($letsencryptdir."/live/".$fqdn);
+                    } else {
+                        syslog(LOG_ERR,"WARNING: there is a nginx manual configuration for $fqdn, you MUST change its certificate to use ACME.SH");
+                    }
+                    @unlink($nginxdir."/".$fqdn.".alternc.conf");
+                    letsencrypt_request($fqdn);
+                } 
+            } else { // is it expiring?
+                continue; // We SKIP fqdn that uses letsencrypt and are not expiring. 
+            }
+        } 
+    } // found a LE cert
+    
+    // - letsencrypt NOK & acme.sh NOK == new domain => get a acme.sh cert
+    if  (!is_file($acmedir."/".$fqdn."/".$fqdn.".key") || !is_file($acmedir."/".$fqdn."/fullchain.cer")) {
+        // acme not ready for this fqdn, do it :) (unless we are throttled, in that case, skip...)        
         if (!letsencrypt_allowed($fqdn)) {
             continue; // Skip this host entirely
         }
         
         $out=array(); $ret=-1;
-        sleep(1); // prevent to hit the global throttle of 10hits/sec on LE servers
-        exec("/usr/bin/letsencrypt certonly --webroot --agree-tos -w /var/www/letsencrypt/ --email root@".trim(file_get_contents("/etc/mailname"))." --expand -d ".escapeshellarg($fqdn)." 2>&1",$out,$ret);
+
+        exec("acme.sh --issue  -d ".escapeshellarg($fqdn)." --webroot /var/www/letsencrypt/ 2>&1",$out,$ret);
         if ($ret!=0) {
             // Log the failure skip it...
-            syslog(LOG_ERR,"Can't get a certificate for $fqdn, letsencrypt logged this:");
+            syslog(LOG_ERR,"Can't get a certificate for $fqdn, acme.sh logged this:");
             foreach($out as $line) if (trim($line)) syslog(LOG_ERR,trim($line));
             letsencrypt_failure($fqdn);
         } else {
@@ -251,9 +248,10 @@ while ($db->next_record()) {
         } 
     }
     
-    // - nginx NOK + letsencrypt OK => configure the vhost
-    if (is_dir($letsencryptdir."/live/".$fqdn) && is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") && is_link($letsencryptdir."/live/".$fqdn."/privkey.pem")) {
-        if (!is_file($nginxdir."/".$fqdn.".alternc.conf") && !is_file($nginxdir."/".$fqdn.".manual.conf")) { // if you define a vhost with .manual.conf, we ignore AlternC's one (allow for a Varnish conf or others
+    // - nginx NOK + acme.sh OK => configure the vhost
+    if (is_file($acmedir."/".$fqdn."/".$fqdn.".key") && is_file($acmedir."/".$fqdn."/fullchain.cer")) {
+        if (!is_file($nginxdir."/".$fqdn.".alternc.conf") && !is_file($nginxdir."/".$fqdn.".manual.conf")) {
+            // if you define a vhost with .manual.conf, we ignore AlternC's one (allow for a Varnish conf or others
             file_put_contents(
                 $nginxdir."/".$fqdn.".alternc.conf",
                 str_replace("%%FQDN%%",$fqdn,file_get_contents("/etc/alternc/templates/nginx/nginx-template.conf"))
@@ -261,8 +259,7 @@ while ($db->next_record()) {
             syslog(LOG_INFO,"put nginx conf for $fqdn");
             $reload=true;
         }
-        // If a cert exists AND we want to test its renewal, let's test its date:
-        if ($renew) try_renew($fqdn);
+
     }
 }
 

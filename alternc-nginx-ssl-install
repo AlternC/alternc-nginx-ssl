@@ -26,14 +26,20 @@ if [ "$1" = "upgrade" ]
 then
     echo "Nginx Configuration:"
     cp /etc/alternc/templates/nginx/nginx.conf /etc/nginx/
+
+#    echo "Reloading Nginx templates:"
+#    /usr/lib/alternc/update_nginx-ssl.sh
+
+    echo "----------------------------------------------------------------------"
+    echo "PLEASE NOTE THAT YOU NEED TO CREATE AN ACME ACCOUNT USING ACME.SH:"
+    echo "acme.sh --register-account  --server <zerossl|letsencrypt> \\"
+    echo "    [ --eab-kid <your-provider-kid> --eab-hmac-key <your-provider-hmac> ] "
+    echo "acme.sh --set-default-ca  --server <zerossl|letsencrypt>"
+    echo "----------------------------------------------------------------------"
     
-    echo "Reloading Nginx templates:"
-    /usr/lib/alternc/update_nginx-ssl.sh
-fi  
 
 if [ "$1" = "before-reload" ]
 then
-    # since we may have created the "mailman" system list, mailman may not be running, let's restart it:
     invoke-rc.d nginx stop
     invoke-rc.d nginx start
 fi

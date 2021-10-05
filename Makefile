@@ -24,8 +24,11 @@
 build:
 
 install:
-	install -m 0755 update_nginx-ssl.sh $(DESTDIR)/usr/lib/alternc/
+	install -m 0755 -o root -g root update_nginx-ssl.sh $(DESTDIR)/usr/lib/alternc/
 	install -m 0644 -o root -g root nginx.conf $(DESTDIR)/etc/alternc/templates/nginx/
 	install -m 0644 -o root -g root nginx-template.conf $(DESTDIR)/etc/alternc/templates/nginx/
-	install -m 750 alternc-nginx-ssl-install $(DESTDIR)/usr/lib/alternc/install.d/
+	install -m 0755 -o root -g root alternc-nginx-ssl-install $(DESTDIR)/usr/lib/alternc/install.d/
+	install -m 0755 -o root -g root acme.sh $(DESTDIR)/usr/local/sbin/
 	install -m 0644 -o root -g root nginx-ssl-letsencrypt.conf $(DESTDIR)/etc/apache2/conf-enabled/
+	install -m 0644 -o root -g root acme-sh-env $(DESTDIR)/etc/environment.d/
+

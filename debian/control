@@ -1,16 +1,17 @@
-Source: alternc-nginx-ssl
+Source: alternc-nginx-ssl-acme
 Section: admin
 Priority: optional
 Maintainer: Benjamin Sonntag <benjamin@sonntag.fr>
 Build-Depends: debhelper (>= 8)
 Standards-Version: 3.9.4
 
-Package: alternc-nginx-ssl
+Package: alternc-nginx-ssl-acme
 Priority: optional
 Section: admin
 Architecture: all
-Depends: nginx-extras, letsencrypt | certbot, alternc (>= 3.2.10), dnsutils, libapache2-mod-rpaf
-Description: Nginx + SSL via Letsencrypt module for AlternC
+Depends: nginx-extras, alternc (>= 3.2.10), dnsutils, libapache2-mod-rpaf
+Conflicts: alternc-nginx-ssl
+Description: Nginx + SSL via Acme.sh module for AlternC
  AlternC is a mutualized hosting software manager for Linux.
  It allows you to manage your websites, domains, ftp, emails, aliases,
  web statistics, mailing-lists, etc.
@@ -19,12 +20,12 @@ Description: Nginx + SSL via Letsencrypt module for AlternC
  configuration for any locally hosted vhost.
  .
  More information on https://www.alternc.com/
-Description-fr.UTF-8: Module Nginx SSL Letsencrypt pour AlternC
+Description-fr.UTF-8: Module Nginx SSL Acme.sh pour AlternC
  AlternC est un logiciel d'hébergement mutualisé pour serveur Linux.
  Il permet de gérer les sites web, domaines, ftp, emails, alias,
  statistiques web, listes de discussions, etc.
  .
  Ce paquet est un module optionnel qui permet de gérer une configuration
- automatique de nginx/https avec letsencrypt.
+ automatique de nginx/https avec acme.sh.
  .
  Pour plus d'informations, consultez https://www.alternc.com/
