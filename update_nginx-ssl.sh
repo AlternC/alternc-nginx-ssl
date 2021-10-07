@@ -201,7 +201,7 @@ while ($db->next_record()) {
                 // is expired, migrating to ACME.SH:
                 syslog(LOG_INFO,"Letsencrypt cert for $fqdn will expire in 30 days, migrating to acme.sh");
                 $out=array(); $ret=-1;
-                exec("acme.sh --issue  -d ".escapeshellarg($fqdn)." --webroot /var/www/letsencrypt/ 2>&1",$out,$ret);
+                exec("acme.sh --home ".escapeshellarg($acmedir)." --issue  -d ".escapeshellarg($fqdn)." --webroot /var/www/letsencrypt/ 2>&1",$out,$ret);
                 if ($ret!=0) {
                     // Log the failure skip it...
                     syslog(LOG_ERR,"Can't get a certificate for $fqdn, acme.sh logged this:");
@@ -237,7 +237,7 @@ while ($db->next_record()) {
         
         $out=array(); $ret=-1;
 
-        exec("acme.sh --issue  -d ".escapeshellarg($fqdn)." --webroot /var/www/letsencrypt/ 2>&1",$out,$ret);
+        exec("acme.sh --home ".escapeshellarg($acmedir)." --issue  -d ".escapeshellarg($fqdn)." --webroot /var/www/letsencrypt/ 2>&1",$out,$ret);
         if ($ret!=0) {
             // Log the failure skip it...
             syslog(LOG_ERR,"Can't get a certificate for $fqdn, acme.sh logged this:");

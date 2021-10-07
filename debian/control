@@ -9,7 +9,7 @@ Package: alternc-nginx-ssl-acme
 Priority: optional
 Section: admin
 Architecture: all
-Depends: nginx-extras, alternc (>= 3.2.10), dnsutils, libapache2-mod-rpaf
+Depends: nginx-extras, alternc (>= 3.2.10), dnsutils, libapache2-mod-rpaf, acme-sh
 Conflicts: alternc-nginx-ssl
 Description: Nginx + SSL via Acme.sh module for AlternC
  AlternC is a mutualized hosting software manager for Linux.

@@ -1,5 +1,5 @@
 debian/.debhelper/
-debian/alternc-nginx-ssl.debhelper.log
-debian/alternc-nginx-ssl.substvars
-debian/alternc-nginx-ssl/
+debian/alternc-nginx-ssl-acme.debhelper.log
+debian/alternc-nginx-ssl-acme.substvars
+debian/alternc-nginx-ssl-acme/
 debian/files

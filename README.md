@@ -13,8 +13,8 @@ via a file in /etc/environment.d/
 
 to create an acme account, log out and log in (to get the ENV var) then use : 
 
-acme.sh --register-account  --server <zerossl|letsencrypt> \
+acme.sh --home /etc/acme.sh --register-account  --server <zerossl|letsencrypt> \
     [ --eab-kid <your-provider-kid> --eab-hmac-key <your-provider-hmac> ] 
-acme.sh --set-default-ca  --server <zerossl|letsencrypt>
+acme.sh --home /etc/acme.sh --set-default-ca  --server <zerossl|letsencrypt>
 
 
