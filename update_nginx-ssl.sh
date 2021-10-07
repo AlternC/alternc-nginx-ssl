@@ -182,7 +182,7 @@ while ($db->next_record()) {
     // - nginx OK + letsencrypt OK & not to be renewed => do nothing
 
     // - Letsencrypt OK BUT will expire soon => migrate to acme.sh
-    if (is_dir($letsencryptdir."/live/".$fqdn) && is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") && is_link($letsencryptdir."/live/".$fqdn."/privkey.pem") && !is_file($acmedir."/".$fqdn."/".$fqdn.".key")) {
+    if (is_dir($letsencryptdir."/live/".$fqdn) && is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") && is_link($letsencryptdir."/live/".$fqdn."/privkey.pem") && !is_file($acmedir."/cert/".$fqdn."/".$fqdn.".key")) {
         // shall we migrate ?
         $out=array();
         exec("openssl x509 -in ".escapeshellarg($letsencryptdir."/live/".$fqdn."/cert.pem")." -noout -enddate",$out,$ret);
@@ -229,7 +229,7 @@ while ($db->next_record()) {
     } // found a LE cert
     
     // - letsencrypt NOK & acme.sh NOK == new domain => get a acme.sh cert
-    if  (!is_file($acmedir."/".$fqdn."/".$fqdn.".key") || !is_file($acmedir."/".$fqdn."/fullchain.cer")) {
+    if  (!is_file($acmedir."/cert/".$fqdn."/".$fqdn.".key") || !is_file($acmedir."/cert/".$fqdn."/fullchain.cer")) {
         // acme not ready for this fqdn, do it :) (unless we are throttled, in that case, skip...)        
         if (!letsencrypt_allowed($fqdn)) {
             continue; // Skip this host entirely
@@ -250,7 +250,7 @@ while ($db->next_record()) {
     }
     
     // - nginx NOK + acme.sh OK => configure the vhost
-    if (is_file($acmedir."/".$fqdn."/".$fqdn.".key") && is_file($acmedir."/".$fqdn."/fullchain.cer")) {
+    if (is_file($acmedir."/cert/".$fqdn."/".$fqdn.".key") && is_file($acmedir."/cert/".$fqdn."/fullchain.cer")) {
         if (!is_file($nginxdir."/".$fqdn.".alternc.conf") && !is_file($nginxdir."/".$fqdn.".manual.conf")) {
             // if you define a vhost with .manual.conf, we ignore AlternC's one (allow for a Varnish conf or others
             file_put_contents(
