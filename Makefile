@@ -23,6 +23,9 @@
 
 build:
 
+build_deb:
+	dpkg-buildpackage -us -uc
+
 install:
 	install -m 0755 update_nginx-ssl.sh $(DESTDIR)/usr/lib/alternc/
 	install -m 0644 -o root -g root nginx.conf $(DESTDIR)/etc/alternc/templates/nginx/
