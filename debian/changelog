@@ -1,5 +1,11 @@
 alternc-nginx-ssl (3.3.4) oldstable; urgency=low
 
+  * adds custom deny rules for nginx
+
+ -- Pierre Bourdin <pierre@octopuce.fr>  Thu, 08 Sep 2022 14:55:25 +0200
+
+alternc-nginx-ssl (3.3.4) oldstable; urgency=low
+
   * adds a failsafe check before starting loop
 
  -- Thibault Francois <thibault@octopuce.fr>  Wed,  16 Sep 2020 11:11:00 +0200
