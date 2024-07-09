@@ -58,6 +58,7 @@ if (!$d) {
 $templates="";
 while (($c=readdir($d))!==false) {
     if (is_file($templatedir."/".$c) && substr($c,-5)==".conf") {
+        $c=preg_replace('#-(http|https|both)\.conf$#','.conf',$c);
         if ($templates) $templates.=",";
         $templates.="'".substr($c,0,-5)."'";
     }
