@@ -28,8 +28,8 @@ then
     cp /etc/alternc/templates/nginx/nginx.conf /etc/nginx/
     
     echo "Reloading Nginx templates:"
-    /usr/lib/alternc/update_nginx-ssl.sh
-fi  
+    /usr/lib/alternc/update_nginx-ssl
+fi
 
 if [ "$1" = "before-reload" ]
 then
