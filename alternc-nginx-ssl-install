@@ -22,6 +22,14 @@
 # Purpose of file: Install nginx conf files.
 # ----------------------------------------------------------------------
 
+if [ "$1" = "apache2" ]
+then
+	#Workaround alternc.install
+	#Pprevent a2endmo ssl
+        a2dismod ssl
+        ln -s /etc/apache2/mods-available/alternc-nginx-ssl-empty.conf /etc/apache2/mods-enabled/ssl.load
+fi
+
 if [ "$1" = "upgrade" ]
 then
     echo "Nginx Configuration:"
