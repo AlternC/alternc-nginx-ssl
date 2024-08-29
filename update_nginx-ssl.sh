@@ -202,7 +202,7 @@ if (date("N")==1 && date("H")>7 && date("H")<17 && (!isset($status["lastrenew"])
     $renew=true;
 }
 $db->query("SELECT domaine,sub FROM sub_domaines WHERE type IN (".$templates.");");
-$fqdnlist[]=$fqdn;
+$fqdnlist=[];
 while ($db->next_record()) {
 
     $fqdn=$db->Record["sub"].(($db->Record["sub"])?".":"").$db->Record["domaine"];
@@ -224,7 +224,8 @@ while ($db->next_record()) {
     if (!$found) { // MY IP address is not in the DNS for this FQDN...
         continue; 
     }
-
+    //fqdn is found and looks valid, add to fqdn list
+    $fqdnlist[]=$fqdn;
     // cases :
     // - nginx OK + letsencrypt OK => do nothing
 
