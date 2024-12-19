@@ -8,7 +8,7 @@ CONFIGFILE="/etc/alternc/local.sh"
 case "$1" in
 	configure)
 		printf "\tDisable apache mode_ssl\n"
-		a2dismod --quiet ssl
+		a2dismod --quiet ssl 1>/dev/null
 		service apache2 restart
 
 		printf "\tUpdate $CONFIGFILE configuration\n"
