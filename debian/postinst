@@ -26,6 +26,9 @@ case "$1" in
 			printf "\tDisable default server listenning on http port\n"
 			rm /etc/nginx/sites-enabled/default
 		fi
+
+		## Force panel AlternC to use only https
+		mysql_query 'UPDATE variable SET value=1 WHERE name = "force_https"'
 	;;
 
 esac
