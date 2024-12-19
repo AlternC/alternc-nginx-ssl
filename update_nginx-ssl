@@ -201,7 +201,15 @@ $renew=false;
 if (date("N")==1 && date("H")>7 && date("H")<17 && (!isset($status["lastrenew"]) || $status["lastrenew"]<(time()-14400))) {
     $renew=true;
 }
-$db->query("SELECT domaine,sub FROM sub_domaines WHERE type IN (".$templates.");");
+
+//Add default panel hostname to fqdnlist
+$sql="";
+if (!empty($GLOBALS['L_FQDN'])) {
+        $sql = "SELECT '".$GLOBALS['L_FQDN']."' as domaine,'' as sub UNION ";
+}
+
+//Add to fdqdn list all domain managed by panel
+$db->query($sql." SELECT domaine,sub FROM sub_domaines WHERE type IN (".$templates.");");
 $fqdnlist=[];
 while ($db->next_record()) {
 
