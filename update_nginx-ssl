@@ -263,9 +263,19 @@ while ($db->next_record()) {
     // - nginx NOK + letsencrypt OK => configure the vhost
     if (is_dir($letsencryptdir."/live/".$fqdn) && is_link($letsencryptdir."/live/".$fqdn."/fullchain.pem") && is_link($letsencryptdir."/live/".$fqdn."/privkey.pem")) {
         if (!is_file($nginxdir."/".$fqdn.".alternc.conf") && !is_file($nginxdir."/".$fqdn.".manual.conf")) { // if you define a vhost with .manual.conf, we ignore AlternC's one (allow for a Varnish conf or others
+            $template_content = file_get_contents("/etc/alternc/templates/nginx/nginx-template.conf");
+
+            $apache_port_http = 80; //value by default
+            if (!empty($GLOBALS['L_APACHE_PORT_HTTP']) && intval($GLOBALS['L_APACHE_PORT_HTTP']) > 0)  {
+                $apache_port_http= $GLOBALS['L_APACHE_PORT_HTTP'];
+            }
+
+            $template_content = str_replace("%%FQDN%%",$fqdn,$template_content);
+            $template_content = str_replace("%%APACHE_PORT_HTTP%%",$apache_port_http,$template_content);
+
             file_put_contents(
                 $nginxdir."/".$fqdn.".alternc.conf",
-                str_replace("%%FQDN%%",$fqdn,file_get_contents("/etc/alternc/templates/nginx/nginx-template.conf"))
+                $template_content
             );
             syslog(LOG_INFO,"put nginx conf for $fqdn");
             $reload=true;
