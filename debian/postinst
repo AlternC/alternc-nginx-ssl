@@ -7,7 +7,7 @@ CONFIGFILE="/etc/alternc/local.sh"
 
 case "$1" in
 	configure)
-		printf "\tDisable apache mode_ssl\n"
+		printf "\tDisable apache mod_ssl\n"
 		a2dismod --quiet ssl 1>/dev/null
 		service apache2 restart
 
@@ -23,11 +23,11 @@ case "$1" in
 		## Disable nginx server default if it tries to listen on http port
 		if [ -h /etc/nginx/sites-enabled/default ] && grep -qP '\s*listen\s*80[^\d]' /etc/nginx/sites-available/default
 		then
-			printf "\tDisable default server listenning on http port\n"
+			printf "\tDisable default server listening on http port\n"
 			rm /etc/nginx/sites-enabled/default
 		fi
 
-		## Force panel AlternC to use only https
+		## Force AlternC panel to use only https
 		mysql_query 'UPDATE variable SET value=1 WHERE name = "force_https"'
 	;;
 
