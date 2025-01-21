@@ -30,8 +30,12 @@
  * if necessary, generate or update a letsencrypt certificate.
  * if necessary, reload nginx.
  * throttle the letsencrypt requests, thanks to a cache file in /var/cache/nginx-ssl/requests.json
+ * 
  * has a blacklist of FQDN & domains to ignore (because we have too many or they are provoking errors, like too long fqdn on jessie's certbot)
  * the blacklist is a one-line-per-domaine file in /etc/alternc/nginx-ssl.blacklist.txt
+ * 
+ * has a list of domains for which we already have a wildcard certificate and nginx configuration setup
+ * this file contains one domain per line in /etc/alternc/ssl-wildcards.txt
  */ 
 
 // ------------------------------------------------------------
@@ -68,6 +72,8 @@ closedir($d);
 // fqdn/domains blacklist
 $blacklist=@explode("\n",@file_get_contents("/etc/alternc/nginx-ssl.blacklist.txt"));
 if (!is_array($blacklist)) $blacklist=array();
+$wildcard=@explode("\n",@file_get_contents("/etc/alternc/ssl-wildcards.txt"));
+if (!is_array($wildcard)) $wildcard=array();
 
 // ------------------------------------------------------------
 // open a connection to the DB, get variables:
@@ -215,9 +221,15 @@ while ($db->next_record()) {
 
     $fqdn=$db->Record["sub"].(($db->Record["sub"])?".":"").$db->Record["domaine"];
 
+    // we ignore the manually-excluded FQDNs
     if (in_array($db->Record["domaine"],$blacklist) || in_array($fqdn,$blacklist)) {
         continue;
     }
+    // we also ignore the wildcards (but only 1 level below the stated domain)
+    $ignore=false;
+    foreach($wildcard as $one) 
+        if (preg_match('#^[^\.]+\.'.str_replace(".","\\.",$one).'$#',$fqdn)) $ignore=true;
+    if ($ignore) continue;
 
 	// Check the DNS for this fqdn. it should point to one of our IP addresses
     $out=array();
