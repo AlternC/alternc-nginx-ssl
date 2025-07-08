@@ -3,4 +3,5 @@
 /var/www/letsencrypt/.well-known/acme-challenge
 /usr/lib/alternc/install.d
 /etc/apache2/conf-enabled
+/etc/apache2/mods-available/
 /var/cache/nginx-ssl
