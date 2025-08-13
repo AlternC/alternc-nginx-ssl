@@ -1,3 +1,16 @@
+alternc-nginx-ssl (3.4.0) bookworm; urgency=low
+
+  * Stop support before bookworm
+  * Bugfix about nginx dependency
+  * Prevent some conflict with apache
+    * take in consideration apache ssl state
+    * Proxy to apache port
+  * Some typo
+  * Ignore domain managed by /etc/alternc/ssl-wildcards.txt file exclusion
+  * Generate certificate to panel url
+
+ -- Camille Lafitte <alternc@webelys.com>  Wed,  13 Aug 2025 12:15:00 +0000
+
 alternc-nginx-ssl (3.3.5) buster bullseye bookworm; urgency=low
 
   * Support until bookworm release
