@@ -1,3 +1,9 @@
+alternc-nginx-ssl (3.4.0-1) bookworm; urgency=low
+
+  * Remove dependency of nginx-extras Debian package
+
+ -- Pierre Bourdin <pierre@octopuce.fr>  Wed,  14 Jan 2026 10:14:00 +0000
+
 alternc-nginx-ssl (3.4.0) bookworm; urgency=low
 
   * Stop support before bookworm
