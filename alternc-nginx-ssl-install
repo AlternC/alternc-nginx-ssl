@@ -29,6 +29,10 @@ then
     
     echo "Reloading Nginx templates:"
     /usr/lib/alternc/update_nginx-ssl
+
+    echo "Force apache2 remoteip"
+    a2enmod remoteip
+    invoke-rc.d apache2 reload
 fi
 
 if [ "$1" = "before-reload" ]
