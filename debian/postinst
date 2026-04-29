@@ -11,6 +11,10 @@ case "$1" in
 		a2dismod --quiet ssl 1>/dev/null
 		a2enconf alternc-nginx-ssl --quiet 1>/dev/null
 
+		if [ -f /etc/apache2/conf-enabled/nginx-ssl-letsencrypt.conf ]; then
+			rm /etc/apache2/conf-enabled/nginx-ssl-letsencrypt.conf
+		fi
+
 		printf "\tManage proxy mode\n"
 		a2dismod --quiet rpaf 1>/dev/null
 		a2enmod --quiet remoteip 1>/dev/null
