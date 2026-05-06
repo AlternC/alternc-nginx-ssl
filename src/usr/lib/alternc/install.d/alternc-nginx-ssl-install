@@ -26,6 +26,7 @@ if [ "$1" = "upgrade" ]
 then
     echo "Nginx Configuration:"
     cp /etc/alternc/templates/nginx/nginx.conf /etc/nginx/
+    cp /etc/alternc/templates/nginx/conf.d/20-alternc-nginx-ssl.conf /etc/nginx/conf.d/
     
     echo "Reloading Nginx templates:"
     /usr/lib/alternc/update_nginx-ssl
