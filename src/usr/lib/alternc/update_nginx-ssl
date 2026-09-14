@@ -195,6 +195,22 @@ function try_renew($fqdn) {
     }
 }
 
+// ------------------------------------------------------------
+// Check if fqdn is locally hosted
+
+function isLocallyHosted($fqdn) {
+    $out=array();
+    exec("dig +short A ".escapeshellarg($fqdn),$out);
+    $found=false;
+    foreach($out as $line) {
+        if (in_array( trim($line), $myips)) {
+            $found=true;
+            break;
+        }
+    }
+    return $found;
+}
+
 
 // ------------------------------------------------------------
 // Search for anything we are hosting locally :
@@ -232,18 +248,11 @@ while ($db->next_record()) {
     if ($ignore) continue;
 
 	// Check the DNS for this fqdn. it should point to one of our IP addresses
-    $out=array();
-    exec("dig +short A ".escapeshellarg($fqdn),$out);
-    $found=false;
-    foreach($out as $line) {
-        if (in_array( trim($line), $myips)) {
-            $found=true;
-            break;
-        }
+    // MY IP address is not in the DNS for this FQDN...
+    if (!isLocallyHosted($fqdn)) {
+        continue;
     }
-    if (!$found) { // MY IP address is not in the DNS for this FQDN...
-        continue; 
-    }
+
     //fqdn is found and looks valid, add to fqdn list
     $fqdnlist[]=$fqdn;
     // cases :
