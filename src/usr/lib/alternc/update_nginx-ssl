@@ -208,6 +208,20 @@ function isLocallyHosted($fqdn) {
             break;
         }
     }
+    /*
+     * Behind any proxy dig +trace we can't verify locally hosting
+     * Workaround is to use certbot with --dry-run mode, we increase rate limit and could manage more certficate generation
+    */
+    if (!$found) {
+        $output = array();
+        $return_var = -1;
+        exec("certbot --dry-run --non-interactive --webroot -w /var/lib/acme/ certonly -d ".$fqdn." 2>&1", $output, $return_var);
+
+        // Dry run was successful
+        if ($return_var == 0) {
+            $found = true;
+        }
+    }
     return $found;
 }
 
